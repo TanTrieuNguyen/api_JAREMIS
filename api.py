@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 import importlib.util
+from flask_cors import CORS
 
 PREDICT_SCRIPT_PATH = os.path.join("backend", "predict_disease_dl.py")
 spec = importlib.util.spec_from_file_location("predict_module", PREDICT_SCRIPT_PATH)
@@ -8,6 +9,7 @@ predict_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(predict_module)
 
 app = Flask(__name__)
+CORS(app)
 app.config['JSON_AS_ASCII'] = False
 
 @app.route("/predict", methods=["POST"])
@@ -35,3 +37,4 @@ def predict():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))  # Render sẽ cấp PORT ngẫu nhiên
     app.run(host="0.0.0.0", port=port)
+
