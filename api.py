@@ -9,7 +9,7 @@ predict_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(predict_module)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "https://tantrieunguyen.github.io/JAREMIS/"}})
 app.config['JSON_AS_ASCII'] = False
 
 @app.route("/predict", methods=["POST"])
@@ -37,4 +37,5 @@ def predict():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))  # Render sẽ cấp PORT ngẫu nhiên
     app.run(host="0.0.0.0", port=port)
+
 
