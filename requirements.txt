@@ -5,6 +5,8 @@ python-dotenv
 pydub
 speechrecognition
 gtts
+flask
 tensorflow
+flask-cors
 pandas
 numpy
