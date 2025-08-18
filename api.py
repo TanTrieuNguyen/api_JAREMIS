@@ -55,6 +55,22 @@ def api_multilang():
     if not symptoms_text:
         return jsonify({"error": True, "message": "Vui lòng nhập triệu chứng"}), 400
     return jsonify(multilang_diagnose(symptoms_text, user_lang))
+# route để test service luôn hoạt động
+@app.route("/ping")
+def ping():
+    return jsonify({"msg": "pong"})
+
+
+# vòng lặp nền đếm số để không bị sleep
+def keep_alive_counter():
+    i = 1
+    while True:
+        print(f"Counter: {i}")
+        i += 1
+        time.sleep(30)  # mỗi 30s tăng số 1 lần
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Render sẽ cấp PORT ngẫu nhiên
+    app.run(host="0.0.0.0", port=port)
+
+
