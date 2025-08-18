@@ -2,7 +2,6 @@
 
 import os
 import requests
-import numpy as np
 from typing import List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
@@ -17,9 +16,6 @@ load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 # Import các module nội bộ (giữ nguyên nếu bạn đã có)
 from analyzer import extract_symptoms
 from decision_logic import make_decision
-from backend.predict_disease_dl import predict_disease as base_predict
-from backend.who_api import get_popular_diseases
-from backend.multilang_diagnosis import multilang_diagnose
 
 # ===== EndlessMedical API (RapidAPI) =====
 ENDLESS_API_KEY = os.getenv("ENDLESSMEDICAL_API_KEY", "")
@@ -131,123 +127,6 @@ def get_healthfinder_topics() -> Dict[str, Any]:
     if isinstance(data, dict):
         items = data.get("Result", {}).get("Topics", []) or data.get("result", {}).get("topics", []) or []
     return {"items": items}
-
-
-def calculate_who_boost(disease_name: str, popular_diseases: List[str]) -> float:
-    """Tính boost factor dựa trên WHO data"""
-    disease_lower = disease_name.lower().strip()
-    
-    # Exact match gets highest boost
-    for i, pop_disease in enumerate(popular_diseases):
-        if disease_lower == pop_disease.lower():
-            return 0.3 - (i * 0.02)  # 0.3 for #1, 0.28 for #2, etc
-    
-    # Partial match gets medium boost  
-    for i, pop_disease in enumerate(popular_diseases):
-        if (disease_lower in pop_disease.lower() or 
-            pop_disease.lower() in disease_lower):
-            return 0.15 - (i * 0.01)  # Medium boost
-    
-    return 0.0  # No boost
-
-def enhanced_predict_disease(input_symptoms: List[str], region: str = "Global") -> Dict[str, Any]:
-    """AI chẩn đoán có tích hợp WHO epidemic data"""
-    
-    # 1. Base prediction từ model gốc
-    base_result = base_predict(input_symptoms)
-    
-    # 2. Lấy WHO data
-    try:
-        popular_diseases = get_popular_diseases(region)
-        who_data_available = len(popular_diseases) > 0
-    except Exception as e:
-        popular_diseases = []
-        who_data_available = False
-        print(f"WHO API error: {e}")
-    
-    # 3. Adjust probabilities with WHO data
-    if who_data_available and "all_probabilities" in base_result:
-        adjusted_probs = {}
-        original_probs = base_result["all_probabilities"]
-        
-        for disease, prob in original_probs.items():
-            who_boost = calculate_who_boost(disease, popular_diseases)
-            # Apply boost: new_prob = original_prob + (boost * original_prob) 
-            adjusted_prob = prob + (who_boost * prob)
-            adjusted_probs[disease] = min(1.0, adjusted_prob)  # Cap at 1.0
-        
-        # Find new top prediction
-        top_disease = max(adjusted_probs, key=adjusted_probs.get)
-        top_confidence = adjusted_probs[top_disease]
-        
-        # Update result if different from base
-        if top_disease != base_result["disease"]:
-            base_result["disease"] = top_disease
-            base_result["confidence"] = top_confidence
-            base_result["who_adjusted"] = True
-            base_result["original_disease"] = base_result.get("disease")
-            base_result["original_confidence"] = base_result.get("confidence")
-        
-        # Update top-k with adjusted probabilities
-        sorted_adj = sorted(adjusted_probs.items(), key=lambda x: x[1], reverse=True)
-        base_result["top_k"] = [{"disease": d, "prob": p} for d, p in sorted_adj[:5]]
-        base_result["all_probabilities"] = adjusted_probs
-    
-    # 4. Add WHO context
-    base_result["who_context"] = {
-        "data_available": who_data_available,
-        "popular_diseases": popular_diseases[:10],  # Top 10
-        "region": region,
-        "boost_applied": who_data_available
-    }
-    
-    return base_result
-
-def enhanced_multilang_diagnose(symptoms_text: str, 
-                               user_lang: Optional[str] = None,
-                               region: str = "Global") -> Dict[str, Any]:
-    """Multilang diagnosis với WHO integration"""
-    try:
-        # Bước 1-2: Language detection & translation (tương tự multilang_diagnosis.py)
-        if not user_lang:
-            from backend.trans import translate_text
-            detect_result = translate_text(symptoms_text, src="auto", dest="en")
-            if detect_result.get("error"):
-                return {"error": True, "message": "Không thể nhận diện ngôn ngữ"}
-            user_lang = detect_result["src"]
-        
-        vietnamese_text = symptoms_text
-        if user_lang != "vi":
-            from backend.trans import translate_text
-            translate_to_vi = translate_text(symptoms_text, src=user_lang, dest="vi")
-            if translate_to_vi.get("error"):
-                return {"error": True, "message": "Không thể dịch sang tiếng Việt"}
-            vietnamese_text = translate_to_vi["translated"]
-        
-        # Bước 3: Enhanced AI diagnosis với WHO data
-        from backend.predict_disease_dl import _normalize_input_symptoms
-        normalized_symptoms = _normalize_input_symptoms([vietnamese_text])
-        diagnosis_result = enhanced_predict_disease(normalized_symptoms, region)
-        
-        # Bước 4: Translate advice back
-        if user_lang != "vi" and diagnosis_result.get("advice"):
-            from backend.trans import translate_text
-            advice_translation = translate_text(diagnosis_result["advice"], src="vi", dest=user_lang)
-            if not advice_translation.get("error"):
-                diagnosis_result["advice"] = advice_translation["translated"]
-                diagnosis_result["advice_original"] = diagnosis_result.get("advice")
-        
-        return {
-            "ok": True,
-            "user_language": user_lang,
-            "original_symptoms": symptoms_text,
-            "vietnamese_symptoms": vietnamese_text,
-            "diagnosis": diagnosis_result,
-            "pipeline": "enhanced_multilang_who"
-        }
-        
-    except Exception as e:
-        return {"error": True, "message": f"Enhanced diagnosis error: {str(e)}"}
 
 
 def diagnose_and_suggest(text: str) -> Dict[str, Any]:
