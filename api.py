@@ -14,7 +14,6 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://tantrieunguyen.github.io"]}})
 app.config['JSON_AS_ASCII'] = False
 
-
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -37,25 +36,19 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# route để test service luôn hoạt động
 @app.route("/ping")
 def ping():
-    return jsonify({"msg": "pong"})
+    return {"msg": "pong"}
 
-
-# vòng lặp nền đếm số để không bị sleep
+# 🔹 Thêm thread đếm số vô hạn
 def keep_alive_counter():
     i = 1
     while True:
-        print(f"Counter: {i}")
+        print(f"[KEEP ALIVE] Counter: {i}")
         i += 1
-        time.sleep(30)  # mỗi 30s tăng số 1 lần
-
+        time.sleep(30)  # cứ 30 giây đếm 1 lần
 
 if __name__ == "__main__":
-    # chạy thread nền
     threading.Thread(target=keep_alive_counter, daemon=True).start()
-
-    port = int(os.environ.get("PORT", 5000))  # Render cấp PORT ngẫu nhiên
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
