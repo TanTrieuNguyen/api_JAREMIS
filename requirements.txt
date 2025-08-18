@@ -9,3 +9,5 @@ tensorflow
 pandas
 numpy
 googletrans
+flask
+flask_cors
